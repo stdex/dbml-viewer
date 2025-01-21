@@ -195,8 +195,9 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
   const [highlightedEdges, setHighlightedEdges] = React.useState<Set<string>>(
     new Set()
   );
-  const [selectedNode, setSelectedNode] = React.useState<string | null>(null);
+  const [hoveredNode, setHoveredNode] = React.useState<string | null>(null);
 
+  // 将初始化逻辑移到单独的 useEffect 中，只依赖 dbml
   React.useEffect(() => {
     const { tables, relationships } = parseDbml(dbml);
 
@@ -242,8 +243,8 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
     const NODE_HEIGHT = 300;
     const GROUP_SPACING_X = 200; // 增加组之间的水平间距
     const GROUP_SPACING_Y = 150; // 增加组之间的垂直间距
-    const NODE_SPACING = 50;     // 增加节点之间的间距
-    const GRID_COLUMNS = 3;      // 每行最多放置的组数
+    const NODE_SPACING = 50; // 增加节点之间的间距
+    const GRID_COLUMNS = 3; // 每行最多放置的组数
 
     // 计算每个组的布局
     const calculateGroupLayout = (group: string[]) => {
@@ -261,28 +262,30 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
     };
 
     // 为每个组计算位置
-    const groupPositions = groups.map((group, groupIndex) => {
-      const { columns, rows } = calculateGroupLayout(group);
-      const groupRow = Math.floor(groupIndex / GRID_COLUMNS);
-      const groupCol = groupIndex % GRID_COLUMNS;
+    const groupPositions = groups
+      .map((group, groupIndex) => {
+        const { columns, rows } = calculateGroupLayout(group);
+        const groupRow = Math.floor(groupIndex / GRID_COLUMNS);
+        const groupCol = groupIndex % GRID_COLUMNS;
 
-      // 计算组的起始位置
-      const groupStartX = groupCol * (NODE_WIDTH * 3 + GROUP_SPACING_X);
-      const groupStartY = groupRow * (NODE_HEIGHT * 3 + GROUP_SPACING_Y);
+        // 计算组的起始位置
+        const groupStartX = groupCol * (NODE_WIDTH * 3 + GROUP_SPACING_X);
+        const groupStartY = groupRow * (NODE_HEIGHT * 3 + GROUP_SPACING_Y);
 
-      return group.map((tableName, tableIndex) => {
-        const row = Math.floor(tableIndex / columns);
-        const col = tableIndex % columns;
+        return group.map((tableName, tableIndex) => {
+          const row = Math.floor(tableIndex / columns);
+          const col = tableIndex % columns;
 
-        return {
-          tableName,
-          position: {
-            x: groupStartX + col * (NODE_WIDTH + NODE_SPACING),
-            y: groupStartY + row * (NODE_HEIGHT + NODE_SPACING),
-          },
-        };
-      });
-    }).flat();
+          return {
+            tableName,
+            position: {
+              x: groupStartX + col * (NODE_WIDTH + NODE_SPACING),
+              y: groupStartY + row * (NODE_HEIGHT + NODE_SPACING),
+            },
+          };
+        });
+      })
+      .flat();
 
     // 创建节点
     const initialNodes: Node[] = tables.map((table) => {
@@ -298,7 +301,7 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
         position,
         data: table,
         type: "tableNode",
-        draggable: true,
+        draggable: false,
       };
     });
 
@@ -340,20 +343,19 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
         sourceHandle: `${sourceColumn}-source`,
         targetHandle: `${targetColumn}-target`,
         type: "smoothstep",
-        animated: highlightedEdges.has(`edge-${index}`),
+        animated: false,
         label: getLabel(rel.type),
         markerEnd: getMarkerEnd(rel.type),
         style: {
-          strokeWidth: highlightedEdges.has(`edge-${index}`) ? 3 : 2,
-          stroke: highlightedEdges.has(`edge-${index}`) ? "#ff3366" : "#b1b1b7",
+          strokeWidth: 2,
+          stroke: "#b1b1b7",
         },
-        className: highlightedEdges.has(`edge-${index}`) ? "highlighted" : "",
       };
     });
 
     setNodes(initialNodes);
     setEdges(initialEdges);
-  }, [dbml, highlightedEdges]);
+  }, [dbml]); // 只依赖 dbml
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) =>
@@ -367,57 +369,57 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
     []
   );
 
-  // 处理节点点击
-  const onNodeClick = useCallback(
+  // 移除节点点击事件，添加鼠标移入移出事件
+  const onNodeMouseEnter = useCallback(
     (event: React.MouseEvent, node: Node) => {
       const newHighlightedEdges = new Set<string>();
-
-      if (selectedNode === node.id) {
-        // 如果点击的是已选中的节点，取消高亮
-        setSelectedNode(null);
-      } else {
-        // 高亮与该节点相关的所有边
-        edges.forEach((edge) => {
-          if (edge.source === node.id || edge.target === node.id) {
-            newHighlightedEdges.add(edge.id);
-          }
-        });
-        setSelectedNode(node.id);
-      }
-
+      edges.forEach((edge) => {
+        if (edge.source === node.id || edge.target === node.id) {
+          newHighlightedEdges.add(edge.id);
+        }
+      });
       setHighlightedEdges(newHighlightedEdges);
+      setHoveredNode(node.id);
     },
-    [edges, selectedNode]
+    [edges]
   );
 
-  // 更新边的样式
-  const styledEdges = edges.map((edge) => ({
-    ...edge,
-    animated: highlightedEdges.has(edge.id),
-    style: {
-      ...edge.style,
-      strokeWidth: highlightedEdges.has(edge.id) ? 3 : 2,
-      stroke: highlightedEdges.has(edge.id) ? "#ff3366" : "#b1b1b7",
-    },
-  }));
+  const onNodeMouseLeave = useCallback(() => {
+    setHighlightedEdges(new Set());
+    setHoveredNode(null);
+  }, []);
 
-  // 更新节点的样式
-  const styledNodes = nodes.map((node) => ({
-    ...node,
-    style: {
-      ...node.style,
-      opacity: selectedNode
-        ? node.id === selectedNode ||
-          edges.some(
-            (edge) =>
-              (edge.source === node.id || edge.target === node.id) &&
-              highlightedEdges.has(edge.id)
-          )
-          ? 1
-          : 0.5
-        : 1,
-    },
-  }));
+  // 使用 useMemo 来计算高亮样式
+  const styledEdges = React.useMemo(() => {
+    return edges.map((edge) => ({
+      ...edge,
+      animated: highlightedEdges.has(edge.id),
+      style: {
+        ...edge.style,
+        strokeWidth: highlightedEdges.has(edge.id) ? 3 : 2,
+        stroke: highlightedEdges.has(edge.id) ? "#ff3366" : "#b1b1b7",
+      },
+    }));
+  }, [edges, highlightedEdges]);
+
+  const styledNodes = React.useMemo(() => {
+    return nodes.map((node) => ({
+      ...node,
+      style: {
+        ...node.style,
+        opacity: hoveredNode
+          ? node.id === hoveredNode ||
+            edges.some(
+              (edge) =>
+                (edge.source === node.id || edge.target === node.id) &&
+                highlightedEdges.has(edge.id)
+            )
+            ? 1
+            : 0.5
+          : 1,
+      },
+    }));
+  }, [nodes, edges, hoveredNode, highlightedEdges]);
 
   return (
     <div style={{ width: "100%", height: "1200px" }}>
@@ -426,7 +428,8 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
         edges={styledEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onNodeClick={onNodeClick}
+        onNodeMouseEnter={onNodeMouseEnter}
+        onNodeMouseLeave={onNodeMouseLeave}
         nodeTypes={nodeTypes}
         connectionMode={ConnectionMode.Loose}
         fitView
@@ -443,6 +446,7 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
         }}
         deleteKeyCode={null}
         selectionKeyCode={null}
+        nodesDraggable={false}
       >
         <Background />
         <Controls />
