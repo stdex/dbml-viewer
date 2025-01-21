@@ -346,11 +346,28 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
 
     // 计算布局参数
     const NODE_WIDTH = 280;
-    const NODE_HEIGHT = 300;
-    const GROUP_SPACING_X = 200; // 增加组之间的水平间距
-    const GROUP_SPACING_Y = 150; // 增加组之间的垂直间距
-    const NODE_SPACING = 50; // 增加节点之间的间距
-    const GRID_COLUMNS = 3; // 每行最多放置的组数
+    const calculateNodeHeight = (columnsCount: number) => {
+      const BASE_HEIGHT = 50; // 表头高度
+      const COLUMN_HEIGHT = 40; // 每列的高度
+      return BASE_HEIGHT + columnsCount * COLUMN_HEIGHT;
+    };
+    const GRID_COLUMNS = 6;
+    const GROUP_SPACING_X = 200;
+    const GROUP_SPACING_Y = 150;
+    const NODE_SPACING = 50;
+
+    // 添加计算组最大高度的函数
+    const calculateGroupMaxHeight = (
+      groupTables: string[],
+      tables: TableNode[]
+    ) => {
+      return Math.max(
+        ...groupTables.map((tableName) => {
+          const table = tables.find((t) => t.name === tableName);
+          return calculateNodeHeight(table?.columns.length || 0);
+        })
+      );
+    };
 
     // 计算每个组的布局
     const calculateGroupLayout = (group: string[]) => {
@@ -367,26 +384,33 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
       return { columns, rows };
     };
 
-    // 为每个组计算位置
+    // 修改组位置计算的部分
     const groupPositions = groups
       .map((group, groupIndex) => {
         const { columns, rows } = calculateGroupLayout(group);
         const groupRow = Math.floor(groupIndex / GRID_COLUMNS);
         const groupCol = groupIndex % GRID_COLUMNS;
 
-        // 计算组的起始位置
-        const groupStartX = groupCol * (NODE_WIDTH * 3 + GROUP_SPACING_X);
-        const groupStartY = groupRow * (NODE_HEIGHT * 3 + GROUP_SPACING_Y);
+        // 计算当前组的最大节点高度
+        const maxGroupHeight = calculateGroupMaxHeight(group, tables);
+
+        // 计算组的起始位置，使用最大高度
+        const groupStartX = groupCol * (NODE_WIDTH + GROUP_SPACING_X);
+        const groupStartY = groupRow * (maxGroupHeight + GROUP_SPACING_Y);
 
         return group.map((tableName, tableIndex) => {
           const row = Math.floor(tableIndex / columns);
           const col = tableIndex % columns;
 
+          // 找到对应的表以获取列数
+          const table = tables.find((t) => t.name === tableName);
+          const nodeHeight = calculateNodeHeight(table?.columns.length || 0);
+
           return {
             tableName,
             position: {
               x: groupStartX + col * (NODE_WIDTH + NODE_SPACING),
-              y: groupStartY + row * (NODE_HEIGHT + NODE_SPACING),
+              y: groupStartY + row * (maxGroupHeight + NODE_SPACING), // 使用组的最大高度
             },
           };
         });
@@ -419,6 +443,8 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
         y: 0,
       };
 
+      const nodeHeight = calculateNodeHeight(table.columns.length);
+
       return {
         id: table.name,
         position,
@@ -429,6 +455,9 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
         },
         type: "tableNode",
         draggable: false,
+        style: {
+          height: nodeHeight,
+        },
       };
     });
 
