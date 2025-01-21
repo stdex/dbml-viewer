@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import ReactFlow, {
   Node,
   Edge,
@@ -45,6 +45,16 @@ interface TableGroup {
 interface DbmlFlowProps {
   dbml: string;
 }
+
+interface NodePosition {
+  id: string;
+  x: number;
+  y: number;
+}
+
+// 添加网格配置常量
+const GRID_SIZE = 20; // 网格大小
+const SNAP_THRESHOLD = 10; // 吸附阈值
 
 const parseDbml = (
   dbml: string
@@ -125,11 +135,38 @@ const parseDbml = (
   return { tables, relationships };
 };
 
+// 添加一个辅助函数来决定 handle 位置
+const getHandlePosition = (
+  sourceNodeId: string,
+  targetNodeId: string,
+  nodes: Node[]
+) => {
+  const sourceNode = nodes.find((n) => n.id === sourceNodeId);
+  const targetNode = nodes.find((n) => n.id === targetNodeId);
+
+  if (!sourceNode || !targetNode)
+    return { source: Position.Right, target: Position.Left };
+
+  // 比较节点的 x 坐标来决定连接点位置
+  if (sourceNode.position.x < targetNode.position.x) {
+    return { source: Position.Right, target: Position.Left };
+  } else {
+    return { source: Position.Left, target: Position.Right };
+  }
+};
+
 const TableNode = ({ data }: { data: TableNode }) => {
+  const handleDragStart = (event: React.DragEvent) => {
+    event.dataTransfer.setData("nodeId", data.name);
+    event.stopPropagation();
+  };
+
   return (
     <div
       className="rounded-lg overflow-hidden shadow-lg bg-white"
       style={{ minWidth: 250 }}
+      draggable
+      onDragStart={handleDragStart}
     >
       <div
         className="px-4 py-2 text-white text-lg font-bold"
@@ -144,11 +181,22 @@ const TableNode = ({ data }: { data: TableNode }) => {
             className="px-4 py-2 border-b flex justify-between items-center relative"
           >
             <div className="flex items-center">
-              {/* 左侧连接点（作为目标） */}
+              {/* 左侧连接点（两个用途） */}
               <Handle
                 type="target"
                 position={Position.Left}
                 id={`${column.name}-target`}
+                style={{
+                  background: "#555",
+                  width: 8,
+                  height: 8,
+                  left: -4,
+                }}
+              />
+              <Handle
+                type="source"
+                position={Position.Left}
+                id={`${column.name}-left-source`}
                 style={{
                   background: "#555",
                   width: 8,
@@ -164,11 +212,22 @@ const TableNode = ({ data }: { data: TableNode }) => {
             </div>
             <div className="flex items-center">
               <span className="text-gray-500 text-sm mr-2">{column.type}</span>
-              {/* 右侧连接点（作为源） */}
+              {/* 右侧连接点（两个用途） */}
               <Handle
                 type="source"
                 position={Position.Right}
                 id={`${column.name}-source`}
+                style={{
+                  background: "#555",
+                  width: 8,
+                  height: 8,
+                  right: -4,
+                }}
+              />
+              <Handle
+                type="target"
+                position={Position.Right}
+                id={`${column.name}-right-target`}
                 style={{
                   background: "#555",
                   width: 8,
@@ -196,6 +255,7 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
     new Set()
   );
   const [hoveredNode, setHoveredNode] = React.useState<string | null>(null);
+  const [nodePositions, setNodePositions] = useState<NodePosition[]>([]);
 
   // 将初始化逻辑移到单独的 useEffect 中，只依赖 dbml
   React.useEffect(() => {
@@ -389,24 +449,41 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
     setHoveredNode(null);
   }, []);
 
-  // 使用 useMemo 来计算高亮样式
+  // 修改 styledEdges 的计算逻辑
   const styledEdges = React.useMemo(() => {
-    return edges.map((edge) => ({
-      ...edge,
-      animated: highlightedEdges.has(edge.id),
-      style: {
-        ...edge.style,
-        strokeWidth: highlightedEdges.has(edge.id) ? 3 : 2,
-        stroke: highlightedEdges.has(edge.id) ? "#ff3366" : "#b1b1b7",
-      },
-    }));
-  }, [edges, highlightedEdges]);
+    return edges.map((edge) => {
+      const { source, target } = edge;
+      const handlePositions = getHandlePosition(source, target, nodes);
+
+      // 获取列名部分
+      const sourceColumn = edge.sourceHandle?.replace("-source", "") || "";
+      const targetColumn = edge.targetHandle?.replace("-target", "") || "";
+
+      return {
+        ...edge,
+        sourceHandle: `${sourceColumn}-${
+          handlePositions.source === Position.Right ? "source" : "left-source"
+        }`,
+        targetHandle: `${targetColumn}-${
+          handlePositions.target === Position.Left ? "target" : "right-target"
+        }`,
+        animated: highlightedEdges.has(edge.id),
+        style: {
+          ...edge.style,
+          strokeWidth: highlightedEdges.has(edge.id) ? 3 : 2,
+          stroke: highlightedEdges.has(edge.id) ? "#ff3366" : "#b1b1b7",
+        },
+      };
+    });
+  }, [edges, nodes, highlightedEdges]); // 添加 nodes 作为依赖
 
   const styledNodes = React.useMemo(() => {
     return nodes.map((node) => ({
       ...node,
+      draggable: true,
       style: {
         ...node.style,
+        cursor: "move",
         opacity: hoveredNode
           ? node.id === hoveredNode ||
             edges.some(
@@ -420,6 +497,52 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
       },
     }));
   }, [nodes, edges, hoveredNode, highlightedEdges]);
+
+  const handleDragStart = (event: React.DragEvent, nodeId: string) => {
+    event.dataTransfer.setData("nodeId", nodeId);
+  };
+
+  const handleDragOver = (event: React.DragEvent) => {
+    event.preventDefault();
+  };
+
+  // 添加网格对齐函数
+  const snapToGrid = (x: number, y: number) => {
+    const snappedX = Math.round(x / GRID_SIZE) * GRID_SIZE;
+    const snappedY = Math.round(y / GRID_SIZE) * GRID_SIZE;
+    return { x: snappedX, y: snappedY };
+  };
+
+  // 修改 handleDrop 函数
+  const handleDrop = (event: React.DragEvent) => {
+    event.preventDefault();
+    const nodeId = event.dataTransfer.getData("nodeId");
+
+    // 获取 ReactFlow 容器的位置
+    const reactFlowBounds = event.currentTarget.getBoundingClientRect();
+
+    // 计算相对于容器的位置
+    const x = event.clientX - reactFlowBounds.left;
+    const y = event.clientY - reactFlowBounds.top;
+
+    // 应用网格对齐
+    const { x: snappedX, y: snappedY } = snapToGrid(x, y);
+
+    setNodes((nds) =>
+      nds.map((node) => {
+        if (node.id === nodeId) {
+          return {
+            ...node,
+            position: {
+              x: snappedX,
+              y: snappedY,
+            },
+          };
+        }
+        return node;
+      })
+    );
+  };
 
   return (
     <div style={{ width: "100%", height: "1200px" }}>
@@ -446,9 +569,13 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
         }}
         deleteKeyCode={null}
         selectionKeyCode={null}
-        nodesDraggable={false}
+        nodesDraggable={true}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        snapToGrid={true}
+        snapGrid={[GRID_SIZE, GRID_SIZE]}
       >
-        <Background />
+        <Background gap={GRID_SIZE} size={1} color="#ddd" />
         <Controls />
       </ReactFlow>
     </div>
