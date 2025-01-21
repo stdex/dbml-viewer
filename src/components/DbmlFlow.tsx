@@ -155,7 +155,18 @@ const getHandlePosition = (
   }
 };
 
-const TableNode = ({ data }: { data: TableNode }) => {
+// 修改 TableNode 组件的数据结构
+interface TableNodeData extends TableNode {
+  highlightedColumns?: Set<string>;
+  columnsWithRelations?: Set<string>; // 新增：用于跟踪有关系的列
+}
+
+interface TableNodeProps {
+  data: TableNodeData; // 使用新的接口
+}
+
+// 修改 TableNode 组件，添加 columnsWithRelations 属性
+const TableNode = ({ data }: TableNodeProps) => {
   const handleDragStart = (event: React.DragEvent) => {
     event.dataTransfer.setData("nodeId", data.name);
     event.stopPropagation();
@@ -178,33 +189,42 @@ const TableNode = ({ data }: { data: TableNode }) => {
         {data.columns.map((column, index) => (
           <div
             key={index}
-            className="px-4 py-2 border-b flex justify-between items-center relative"
+            className="px-4 py-2 border-b flex justify-between items-center relative hover:bg-gray-50"
+            style={{
+              backgroundColor: data.highlightedColumns?.has(column.name)
+                ? "rgba(255, 51, 102, 0.1)"
+                : "transparent",
+              transition: "background-color 0.2s ease",
+            }}
           >
             <div className="flex items-center">
-              {/* 左侧连接点（两个用途） */}
-              <Handle
-                type="target"
-                position={Position.Left}
-                id={`${column.name}-target`}
-                style={{
-                  background: "#555",
-                  width: 8,
-                  height: 8,
-                  left: -4,
-                }}
-              />
-              <Handle
-                type="source"
-                position={Position.Left}
-                id={`${column.name}-left-source`}
-                style={{
-                  background: "#555",
-                  width: 8,
-                  height: 8,
-                  left: -4,
-                }}
-              />
-
+              {/* 只在有关系的列上显示 handle */}
+              {data.columnsWithRelations?.has(column.name) && (
+                <>
+                  <Handle
+                    type="target"
+                    position={Position.Left}
+                    id={`${column.name}-target`}
+                    style={{
+                      background: "#cbd5e1", // 更柔和的颜色
+                      width: 6,
+                      height: 6,
+                      left: -3,
+                    }}
+                  />
+                  <Handle
+                    type="source"
+                    position={Position.Left}
+                    id={`${column.name}-left-source`}
+                    style={{
+                      background: "#cbd5e1",
+                      width: 6,
+                      height: 6,
+                      left: -3,
+                    }}
+                  />
+                </>
+              )}
               {column.isPrimary && (
                 <span className="mr-2 text-yellow-500">🔑</span>
               )}
@@ -212,29 +232,33 @@ const TableNode = ({ data }: { data: TableNode }) => {
             </div>
             <div className="flex items-center">
               <span className="text-gray-500 text-sm mr-2">{column.type}</span>
-              {/* 右侧连接点（两个用途） */}
-              <Handle
-                type="source"
-                position={Position.Right}
-                id={`${column.name}-source`}
-                style={{
-                  background: "#555",
-                  width: 8,
-                  height: 8,
-                  right: -4,
-                }}
-              />
-              <Handle
-                type="target"
-                position={Position.Right}
-                id={`${column.name}-right-target`}
-                style={{
-                  background: "#555",
-                  width: 8,
-                  height: 8,
-                  right: -4,
-                }}
-              />
+              {/* 只在有关系的列上显示 handle */}
+              {data.columnsWithRelations?.has(column.name) && (
+                <>
+                  <Handle
+                    type="source"
+                    position={Position.Right}
+                    id={`${column.name}-source`}
+                    style={{
+                      background: "#cbd5e1",
+                      width: 6,
+                      height: 6,
+                      right: -3,
+                    }}
+                  />
+                  <Handle
+                    type="target"
+                    position={Position.Right}
+                    id={`${column.name}-right-target`}
+                    style={{
+                      background: "#cbd5e1",
+                      width: 6,
+                      height: 6,
+                      right: -3,
+                    }}
+                  />
+                </>
+              )}
             </div>
           </div>
         ))}
@@ -256,6 +280,9 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
   );
   const [hoveredNode, setHoveredNode] = React.useState<string | null>(null);
   const [nodePositions, setNodePositions] = useState<NodePosition[]>([]);
+  const [highlightedColumns, setHighlightedColumns] = React.useState<
+    Map<string, Set<string>>
+  >(new Map());
 
   // 将初始化逻辑移到单独的 useEffect 中，只依赖 dbml
   React.useEffect(() => {
@@ -347,7 +374,24 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
       })
       .flat();
 
-    // 创建节点
+    // 创建一个 Map 来跟踪有关系的列
+    const columnsWithRelations = new Map<string, Set<string>>();
+
+    // 初始化 Map
+    tables.forEach((table) => {
+      columnsWithRelations.set(table.name, new Set());
+    });
+
+    // 收集所有有关系的列
+    relationships.forEach((rel) => {
+      const [sourceTable, sourceColumn] = rel.from.split(".");
+      const [targetTable, targetColumn] = rel.to.split(".");
+
+      columnsWithRelations.get(sourceTable)?.add(sourceColumn);
+      columnsWithRelations.get(targetTable)?.add(targetColumn);
+    });
+
+    // 创建节点时包含 columnsWithRelations 信息
     const initialNodes: Node[] = tables.map((table) => {
       const position = groupPositions.find(
         (pos) => pos.tableName === table.name
@@ -359,29 +403,20 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
       return {
         id: table.name,
         position,
-        data: table,
+        data: {
+          ...table,
+          highlightedColumns: new Set(),
+          columnsWithRelations: columnsWithRelations.get(table.name),
+        },
         type: "tableNode",
         draggable: false,
       };
     });
 
-    // 创建边
+    // 修改创建边的部分，移除箭头
     const initialEdges: Edge[] = relationships.map((rel, index) => {
       const [sourceTable, sourceColumn] = rel.from.split(".");
       const [targetTable, targetColumn] = rel.to.split(".");
-
-      const getMarkerEnd = (type: string) => {
-        switch (type) {
-          case ">":
-            return { type: MarkerType.Arrow, width: 20, height: 20 };
-          case "<":
-            return { type: MarkerType.Arrow, width: 20, height: 20 };
-          case "<>":
-            return { type: MarkerType.ArrowClosed, width: 20, height: 20 };
-          default:
-            return { type: MarkerType.Arrow, width: 20, height: 20 };
-        }
-      };
 
       const getLabel = (type: string) => {
         switch (type) {
@@ -405,7 +440,7 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
         type: "smoothstep",
         animated: false,
         label: getLabel(rel.type),
-        markerEnd: getMarkerEnd(rel.type),
+        // 移除 markerEnd
         style: {
           strokeWidth: 2,
           stroke: "#b1b1b7",
@@ -429,23 +464,51 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
     []
   );
 
-  // 移除节点点击事件，添加鼠标移入移出事件
+  // 修改 onNodeMouseEnter
   const onNodeMouseEnter = useCallback(
     (event: React.MouseEvent, node: Node) => {
       const newHighlightedEdges = new Set<string>();
+      const newHighlightedColumns = new Map<string, Set<string>>();
+
       edges.forEach((edge) => {
         if (edge.source === node.id || edge.target === node.id) {
           newHighlightedEdges.add(edge.id);
+
+          // 获取源列和目标列（修正列名提取）
+          const sourceColumn =
+            edge.sourceHandle
+              ?.replace("-source", "")
+              .replace("-left-source", "") || "";
+          const targetColumn =
+            edge.targetHandle
+              ?.replace("-target", "")
+              .replace("-right-target", "") || "";
+
+          // 为源节点添加高亮列
+          if (!newHighlightedColumns.has(edge.source)) {
+            newHighlightedColumns.set(edge.source, new Set());
+          }
+          newHighlightedColumns.get(edge.source)?.add(sourceColumn);
+
+          // 为目标节点添加高亮列
+          if (!newHighlightedColumns.has(edge.target)) {
+            newHighlightedColumns.set(edge.target, new Set());
+          }
+          newHighlightedColumns.get(edge.target)?.add(targetColumn);
         }
       });
+
       setHighlightedEdges(newHighlightedEdges);
+      setHighlightedColumns(newHighlightedColumns);
       setHoveredNode(node.id);
     },
     [edges]
   );
 
+  // 修改 onNodeMouseLeave
   const onNodeMouseLeave = useCallback(() => {
     setHighlightedEdges(new Set());
+    setHighlightedColumns(new Map());
     setHoveredNode(null);
   }, []);
 
@@ -454,6 +517,7 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
     return edges.map((edge) => {
       const { source, target } = edge;
       const handlePositions = getHandlePosition(source, target, nodes);
+      const isHighlighted = highlightedEdges.has(edge.id);
 
       // 获取列名部分
       const sourceColumn = edge.sourceHandle?.replace("-source", "") || "";
@@ -467,36 +531,50 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
         targetHandle: `${targetColumn}-${
           handlePositions.target === Position.Left ? "target" : "right-target"
         }`,
-        animated: highlightedEdges.has(edge.id),
+        animated: isHighlighted,
         style: {
           ...edge.style,
-          strokeWidth: highlightedEdges.has(edge.id) ? 3 : 2,
-          stroke: highlightedEdges.has(edge.id) ? "#ff3366" : "#b1b1b7",
+          strokeWidth: isHighlighted ? 3 : 2,
+          stroke: isHighlighted ? "#ff3366" : "#b1b1b7",
+          opacity: hoveredNode ? (isHighlighted ? 1 : 0.1) : 1, // 降低非高亮边的透明度
+        },
+        labelStyle: {
+          opacity: hoveredNode ? (isHighlighted ? 1 : 0.1) : 1, // 标签透明度跟随边
+          fill: isHighlighted ? "#ff3366" : "#666",
         },
       };
     });
-  }, [edges, nodes, highlightedEdges]); // 添加 nodes 作为依赖
+  }, [edges, nodes, highlightedEdges, hoveredNode]);
 
+  // 修改 styledNodes 的计算逻辑
   const styledNodes = React.useMemo(() => {
-    return nodes.map((node) => ({
-      ...node,
-      draggable: true,
-      style: {
-        ...node.style,
-        cursor: "move",
-        opacity: hoveredNode
-          ? node.id === hoveredNode ||
-            edges.some(
-              (edge) =>
-                (edge.source === node.id || edge.target === node.id) &&
-                highlightedEdges.has(edge.id)
-            )
-            ? 1
-            : 0.5
-          : 1,
-      },
-    }));
-  }, [nodes, edges, hoveredNode, highlightedEdges]);
+    return nodes.map((node) => {
+      const isRelated = hoveredNode
+        ? node.id === hoveredNode ||
+          edges.some(
+            (edge) =>
+              (edge.source === node.id || edge.target === node.id) &&
+              highlightedEdges.has(edge.id)
+          )
+        : true;
+
+      return {
+        ...node,
+        draggable: true,
+        type: "tableNode",
+        data: {
+          ...node.data,
+          highlightedColumns: highlightedColumns.get(node.id),
+        },
+        style: {
+          ...node.style,
+          cursor: "move",
+          opacity: isRelated ? 1 : 0.15, // 降低透明度
+          filter: isRelated ? "none" : "grayscale(80%)", // 添加灰度效果
+        },
+      };
+    });
+  }, [nodes, edges, hoveredNode, highlightedEdges, highlightedColumns]);
 
   const handleDragStart = (event: React.DragEvent, nodeId: string) => {
     event.dataTransfer.setData("nodeId", nodeId);
