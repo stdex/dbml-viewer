@@ -1,0 +1,26 @@
+// 核心表
+// 系统用户表
+Table admin_user [headercolor: #ff7225] {
+  id int(11) [pk, note: "主键，自增"]
+  phone varchar(16) [note: "登录验证手机号"]
+  dingtalk_userid varchar(64) [note: "钉钉用户ID"]
+  avatar_url varchar(255) [note: "用户头像"]
+}
+
+// 钉钉用户与系统用关系
+Ref: admin_user.phone - admin_user_dingtalk.mobile
+
+// 钉钉相关表
+// 钉钉用户
+Table admin_user_dingtalk [headercolor: #ff7225] {
+  id int(11) [pk, note: "主键，自增"]
+  nick varchar(255) [note: "昵称"]
+  avatar_url varchar(255) [note: "头像"]
+  mobile varchar(20) [note: "手机"]
+  email varchar(64) [note: "邮箱"]
+  name varchar(20) [note: "员工姓名"]
+  job_number varchar(10) [note: "员工编号"]
+  title varchar(64) [note: "职位"]
+  create_time int(11) [note: "创建时间"]
+  update_time int(11) [note: "更新时间"]
+}
