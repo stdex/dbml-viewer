@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@dbml/core": "^3.9.5",
     "@radix-ui/react-tooltip": "^1.1.6",
     "@svgdotjs/svg.draggable.js": "^3.0.3",
     "@svgdotjs/svg.js": "^3.2.0",

@@ -24,6 +24,7 @@ import {
   forceCenter,
   forceCollide,
 } from "d3-force";
+import { Parser } from "@dbml/core";
 
 interface TableColumn {
   name: string;
@@ -79,83 +80,80 @@ interface ForceLink {
   target: string;
 }
 
+// 添加 DBML 类型定义
+interface DbmlTable {
+  name: string;
+  fields: DbmlField[];
+  headerColor?: string;
+}
+
+interface DbmlField {
+  name: string;
+  type: string;
+  pk?: boolean;
+  note?: string;
+}
+
+interface DbmlRef {
+  endpoints: {
+    tableName: string;
+    fieldNames: string[];
+    relation: "1" | "*" | ">" | "<";
+  }[];
+}
+
 const parseDbml = (
   dbml: string
 ): {
   tables: TableNode[];
   relationships: Relationship[];
 } => {
-  const tables: TableNode[] = [];
-  const relationships: Relationship[] = [];
+  try {
+    const parser = new Parser();
+    const parsedDbml = parser.parse(dbml, "dbmlv2");
+    const database = parsedDbml.export();
 
-  const lines = dbml.split("\n");
-  let currentTable: TableNode | null = null;
+    // 修改这里：通过 schemas[0] 访问表和引用
+    const tables: TableNode[] = database.schemas[0].tables.map((table) => ({
+      name: table.name,
+      columns: table.fields.map((field) => ({
+        name: field.name,
+        type: field.type.type_name,
+        isPrimary: field.pk,
+        note: field.note,
+      })),
+      headercolor: table.headerColor || "#ff7225",
+    }));
 
-  lines.forEach((line) => {
-    const trimmedLine = line.trim();
+    const relationships: Relationship[] = database.schemas[0].refs.map(
+      (ref) => {
+        const [endpoint1, endpoint2] = ref.endpoints;
 
-    const tableLine = trimmedLine.match(
-      /Table\s+(\w+)\s*(?:\[.*?headercolor:\s*([#\w]+).*?\])?/
-    );
-    if (tableLine) {
-      currentTable = {
-        name: tableLine[1],
-        columns: [],
-        headercolor: tableLine[2] || "#ff7225",
-      };
-      tables.push(currentTable);
-    }
+        // 确定关系类型
+        let type: ">" | "<" | "-" | "<>";
+        if (endpoint1.relation === "*" && endpoint2.relation === "1") {
+          type = ">";
+        } else if (endpoint1.relation === "1" && endpoint2.relation === "*") {
+          type = "<";
+        } else if (endpoint1.relation === "*" && endpoint2.relation === "*") {
+          type = "<>";
+        } else {
+          type = "-";
+        }
 
-    const columnLine = trimmedLine.match(
-      /^\s*(\w+)\s+([\w()]+)(?:\s+\[(.*?)\])?/
-    );
-    if (columnLine && currentTable) {
-      const columnName = columnLine[1];
-      const columnType = columnLine[2];
-      const columnProps = columnLine[3] || "";
-
-      const refMatch = columnProps.match(/ref:\s*([<>-])\s*(\w+)\.(\w+)/);
-      if (refMatch) {
-        const [, relationType, targetTable, targetColumn] = refMatch;
-        relationships.push({
-          from: `${currentTable.name}.${columnName}`,
-          to: `${targetTable}.${targetColumn}`,
-          type: relationType as ">" | "<" | "-",
-        });
+        return {
+          from: `${endpoint1.tableName}.${endpoint1.fieldNames[0]}`,
+          to: `${endpoint2.tableName}.${endpoint2.fieldNames[0]}`,
+          type,
+        };
       }
-
-      currentTable.columns.push({
-        name: columnName,
-        type: columnType,
-        isPrimary: columnProps.includes("pk"),
-        note: columnProps.match(/note:\s*"([^"]*)"/)?.[1],
-      });
-    }
-
-    const refLine = trimmedLine.match(
-      /Ref:\s*(\w+)\.(\w+)\s*([<>-]+)\s*(\w+)\.(\w+)/
     );
-    if (refLine) {
-      const [
-        ,
-        sourceTable,
-        sourceColumn,
-        relationType,
-        targetTable,
-        targetColumn,
-      ] = refLine;
-      relationships.push({
-        from: `${sourceTable}.${sourceColumn}`,
-        to: `${targetTable}.${targetColumn}`,
-        type: relationType as ">" | "<" | "-" | "<>",
-      });
-    }
-  });
 
-  console.log("Parsed tables:", tables);
-  console.log("Parsed relationships:", relationships);
-
-  return { tables, relationships };
+    return { tables, relationships };
+  } catch (error) {
+    console.error("Error parsing DBML:", error);
+    return { tables: [], relationships: [] };
+  }
 };
 
 // 添加一个辅助函数来决定 handle 位置
