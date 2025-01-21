@@ -16,6 +16,7 @@ import ReactFlow, {
   EdgeChange,
 } from "reactflow";
 import "reactflow/dist/style.css";
+import * as Tooltip from "@radix-ui/react-tooltip";
 
 interface TableColumn {
   name: string;
@@ -173,97 +174,115 @@ const TableNode = ({ data }: TableNodeProps) => {
   };
 
   return (
-    <div
-      className="rounded-lg overflow-hidden shadow-lg bg-white"
-      style={{ minWidth: 250 }}
-      draggable
-      onDragStart={handleDragStart}
-    >
+    <Tooltip.Provider>
       <div
-        className="px-4 py-2 text-white text-lg font-bold"
-        style={{ backgroundColor: data.headercolor }}
+        className="rounded-lg overflow-hidden shadow-lg bg-white"
+        style={{ minWidth: 250 }}
+        draggable
+        onDragStart={handleDragStart}
       >
-        {data.name}
+        <div
+          className="px-4 py-2 text-white text-lg font-bold"
+          style={{ backgroundColor: data.headercolor }}
+        >
+          {data.name}
+        </div>
+        <div className="bg-white">
+          {data.columns.map((column, index) => (
+            <Tooltip.Root key={index}>
+              <Tooltip.Trigger asChild>
+                <div
+                  className="px-4 py-2 border-b flex justify-between items-center relative hover:bg-blue-200 cursor-pointer"
+                  style={{
+                    backgroundColor: data.highlightedColumns?.has(column.name)
+                      ? "rgba(255, 51, 102, 0.1)"
+                      : "",
+                    transition: "background-color 0.2s ease",
+                  }}
+                >
+                  <div className="flex items-center">
+                    {data.columnsWithRelations?.has(column.name) && (
+                      <>
+                        <Handle
+                          type="target"
+                          position={Position.Left}
+                          id={`${column.name}-target`}
+                          style={{
+                            background: "#cbd5e1",
+                            width: 6,
+                            height: 6,
+                            left: -3,
+                          }}
+                        />
+                        <Handle
+                          type="source"
+                          position={Position.Left}
+                          id={`${column.name}-left-source`}
+                          style={{
+                            background: "#cbd5e1",
+                            width: 6,
+                            height: 6,
+                            left: -3,
+                          }}
+                        />
+                      </>
+                    )}
+                    {column.isPrimary && (
+                      <span className="mr-2 text-yellow-500">🔑</span>
+                    )}
+                    <span>{column.name}</span>
+                  </div>
+                  <div className="flex items-center">
+                    <span className="text-gray-500 text-sm mr-2">
+                      {column.type}
+                    </span>
+                    {data.columnsWithRelations?.has(column.name) && (
+                      <>
+                        <Handle
+                          type="source"
+                          position={Position.Right}
+                          id={`${column.name}-source`}
+                          style={{
+                            background: "#cbd5e1",
+                            width: 6,
+                            height: 6,
+                            right: -3,
+                          }}
+                        />
+                        <Handle
+                          type="target"
+                          position={Position.Right}
+                          id={`${column.name}-right-target`}
+                          style={{
+                            background: "#cbd5e1",
+                            width: 6,
+                            height: 6,
+                            right: -3,
+                          }}
+                        />
+                      </>
+                    )}
+                  </div>
+                </div>
+              </Tooltip.Trigger>
+              {column.note && (
+                <Tooltip.Portal>
+                  <Tooltip.Content
+                    className="rounded-lg bg-gray-800 px-4 py-2 text-sm text-white shadow-lg max-w-xs z-50"
+                    sideOffset={5}
+                    side="right"
+                    align="center"
+                  >
+                    {column.note}
+                    <Tooltip.Arrow className="fill-gray-800" />
+                  </Tooltip.Content>
+                </Tooltip.Portal>
+              )}
+            </Tooltip.Root>
+          ))}
+        </div>
       </div>
-      <div className="bg-white">
-        {data.columns.map((column, index) => (
-          <div
-            key={index}
-            className="px-4 py-2 border-b flex justify-between items-center relative hover:bg-gray-50"
-            style={{
-              backgroundColor: data.highlightedColumns?.has(column.name)
-                ? "rgba(255, 51, 102, 0.1)"
-                : "transparent",
-              transition: "background-color 0.2s ease",
-            }}
-          >
-            <div className="flex items-center">
-              {/* 只在有关系的列上显示 handle */}
-              {data.columnsWithRelations?.has(column.name) && (
-                <>
-                  <Handle
-                    type="target"
-                    position={Position.Left}
-                    id={`${column.name}-target`}
-                    style={{
-                      background: "#cbd5e1", // 更柔和的颜色
-                      width: 6,
-                      height: 6,
-                      left: -3,
-                    }}
-                  />
-                  <Handle
-                    type="source"
-                    position={Position.Left}
-                    id={`${column.name}-left-source`}
-                    style={{
-                      background: "#cbd5e1",
-                      width: 6,
-                      height: 6,
-                      left: -3,
-                    }}
-                  />
-                </>
-              )}
-              {column.isPrimary && (
-                <span className="mr-2 text-yellow-500">🔑</span>
-              )}
-              <span>{column.name}</span>
-            </div>
-            <div className="flex items-center">
-              <span className="text-gray-500 text-sm mr-2">{column.type}</span>
-              {/* 只在有关系的列上显示 handle */}
-              {data.columnsWithRelations?.has(column.name) && (
-                <>
-                  <Handle
-                    type="source"
-                    position={Position.Right}
-                    id={`${column.name}-source`}
-                    style={{
-                      background: "#cbd5e1",
-                      width: 6,
-                      height: 6,
-                      right: -3,
-                    }}
-                  />
-                  <Handle
-                    type="target"
-                    position={Position.Right}
-                    id={`${column.name}-right-target`}
-                    style={{
-                      background: "#cbd5e1",
-                      width: 6,
-                      height: 6,
-                      right: -3,
-                    }}
-                  />
-                </>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+    </Tooltip.Provider>
   );
 };
 
