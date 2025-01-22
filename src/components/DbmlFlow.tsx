@@ -6,10 +6,7 @@ import ReactFlow, {
   Controls,
   ConnectionMode,
   Position,
-  MarkerType,
   Handle,
-  OnNodesChange,
-  OnEdgesChange,
   applyNodeChanges,
   applyEdgeChanges,
   NodeChange,
@@ -23,6 +20,8 @@ import {
   forceManyBody,
   forceCenter,
   forceCollide,
+  forceX,
+  forceY,
 } from "d3-force";
 import { Parser } from "@dbml/core";
 import { cn } from "../lib/utils";
@@ -56,15 +55,8 @@ interface DbmlFlowProps {
   dbml: string;
 }
 
-interface NodePosition {
-  id: string;
-  x: number;
-  y: number;
-}
-
 // 添加网格配置常量
 const GRID_SIZE = 20; // 网格大小
-const SNAP_THRESHOLD = 10; // 吸附阈值
 
 // 添加 ForceNode 接口定义
 interface ForceNode {
@@ -82,28 +74,6 @@ interface ForceLink {
   source: string;
   target: string;
   strength?: number;
-}
-
-// 添加 DBML 类型定义
-interface DbmlTable {
-  name: string;
-  fields: DbmlField[];
-  headerColor?: string;
-}
-
-interface DbmlField {
-  name: string;
-  type: string;
-  pk?: boolean;
-  note?: string;
-}
-
-interface DbmlRef {
-  endpoints: {
-    tableName: string;
-    fieldNames: string[];
-    relation: "1" | "*" | ">" | "<";
-  }[];
 }
 
 // 在 parseDbml 函数之前添加新的力学布局函数
@@ -282,20 +252,56 @@ const applyForceLayout = (
 
   // 顶层力学模拟
   const topLevelSimulation = forceSimulation(topLevelNodes)
-    .force("charge", forceManyBody().strength(-1500))
-    .force("collide", forceCollide().radius(400).strength(0.8))
+    // 调整排斥力，使用更合理的值
+    .force("charge", forceManyBody().strength(-3000))
+    // 增加碰撞检测的半径和强度
+    .force(
+      "collide",
+      forceCollide()
+        .radius((node: any) => {
+          // 为组节点设置更大的碰撞半径，使用对角线长度作为半径
+          if (node.isGroup) {
+            const diagonal = Math.sqrt(
+              Math.pow(node.width, 2) + Math.pow(node.height, 2)
+            );
+            // 增加碰撞半径，给予更多空间
+            return diagonal * 0.5;
+          }
+          return 320;
+        })
+        .strength(1)
+        .iterations(5) // 增加碰撞检测的迭代次数以获得更稳定的结果
+    )
+    // 调整 X/Y 方向的力，使分布更均匀
+    .force("forceX", forceX().strength(0.2))
+    .force("forceY", forceY().strength(0.2))
     .force(
       "link",
       forceLink(topLevelLinks)
         .id((d: any) => d.id)
-        .distance(500)
-        .strength(0.4)
+        .distance((node) => {
+          // 根据节点类型动态设置连接距离
+          const source = topLevelNodes.find((n) => n.id === node.source);
+          const target = topLevelNodes.find((n) => n.id === node.target);
+          if (source?.isGroup && target?.isGroup) {
+            // 增加组之间的距离
+            return Math.max(
+              1500,
+              (source.width + target.width + source.height + target.height) / 2
+            );
+          }
+          return 1000; // 增加其他节点之间的基础距离
+        })
+        .strength(0.05) // 进一步减小连接强度，让节点更自由地分布
     )
-    .force("center", forceCenter(2000, 1200))
+    // 调整布局中心点和范围
+    .force("center", forceCenter(5000, 4000))
     .stop();
 
-  // 运行顶层模拟
-  for (let i = 0; i < 300; i++) {
+  // 增加预热阶段的初始温度
+  topLevelSimulation.alpha(2);
+  // 增加模拟迭代次数以获得更稳定的结果
+  for (let i = 0; i < 2000; i++) {
     topLevelSimulation.tick();
   }
 
@@ -345,8 +351,7 @@ const applyForceLayout = (
         const rowIndex = Math.floor(tableIndex / tablesPerRow);
         const colIndex = tableIndex % tablesPerRow;
 
-        const TABLE_WIDTH = 480;
-        const TABLE_HEIGHT = 40 + table.columns.length * 40;
+        const TABLE_WIDTH = 320;
         const PADDING = 80; // 增加内边距
 
         // 计算每行的起始位置，考虑该行表格的数量
@@ -463,13 +468,13 @@ const parseDbml = (
 
     // 修改表组解析
     const groups: TableGroup[] =
-      database.schemas[0].tableGroups?.map((group) => ({
+      database.schemas[0].tableGroups?.map((group:any) => ({
         name: group.name,
-        tables: group.tables.map((table) => ({
+        tables: group.tables.map((table:any) => ({
           tableName: table.tableName, // 直接使用表名字符串
           schemaName: table.schemaName || "public",
         })),
-        color: "#ff7225", // 使用 group.color
+        color: group.color || "#ff7225", // 使用 group.color
       })) || [];
 
     const relationships: Relationship[] = database.schemas[0].refs.map(
@@ -666,7 +671,7 @@ const GroupNode = ({ data }: GroupNodeProps) => {
     <div
       className="rounded-lg border border-dashed"
       style={{
-        backgroundColor: `${data.color}11`,
+        backgroundColor: `${data.color}12`,
         borderColor: data.color,
         minWidth: 500,
         height: "100%",
@@ -991,7 +996,7 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
   };
 
   return (
-    <div className="w-full h-[1200px]">
+    <div className="w-full h-[600px]">
       <ReactFlow
         nodes={styledNodes}
         edges={styledEdges}
