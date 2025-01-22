@@ -1,6 +1,5 @@
 "use client";
 
-import * as React from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -10,6 +9,7 @@ import {
   MoreHorizontal,
   Upload,
 } from "lucide-react";
+import * as React from "react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -26,11 +26,10 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { useCallback, useEffect, useState } from "react";
-import { Parser } from "@dbml/core";
-import { cn } from "@/lib/utils";
-import { Database } from "@/data/database";
 import { useDatabaseStore } from "@/data/store";
+import { cn } from "@/lib/utils";
+import { Parser } from "@dbml/core";
+import { useCallback, useEffect, useState } from "react";
 
 const data = [
   [
