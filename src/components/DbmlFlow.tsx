@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback } from "react";
 import ReactFlow, {
   Node,
   Edge,
@@ -387,11 +387,7 @@ const applyForceLayout = (
   });
 
   // 在力学布局完成后，计算每个组的实际所需高度
-  const calculateFinalGroupHeight = (
-    group: TableGroup,
-    groupTables: TableNode[],
-    positions: Map<string, { x: number; y: number }>
-  ) => {
+  const calculateFinalGroupHeight = (groupTables: TableNode[]) => {
     const PADDING = 80;
     const tablePositions = groupTables
       .map((table) => {
@@ -431,7 +427,7 @@ const applyForceLayout = (
         group.name,
         {
           width: initialSize.width,
-          height: calculateFinalGroupHeight(group, groupTables, nodePositions),
+          height: calculateFinalGroupHeight(groupTables),
         },
       ];
     })
@@ -468,9 +464,9 @@ const parseDbml = (
 
     // 修改表组解析
     const groups: TableGroup[] =
-      database.schemas[0].tableGroups?.map((group:any) => ({
+      database.schemas[0].tableGroups?.map((group: any) => ({
         name: group.name,
-        tables: group.tables.map((table:any) => ({
+        tables: group.tables.map((table: any) => ({
           tableName: table.tableName, // 直接使用表名字符串
           schemaName: table.schemaName || "public",
         })),
