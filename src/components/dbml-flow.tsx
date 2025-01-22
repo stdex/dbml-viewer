@@ -1,29 +1,31 @@
-import React, { useCallback } from "react";
-import ReactFlow, {
-  Node,
-  Edge,
-  Background,
-  Controls,
-  ConnectionMode,
-  Position,
-  Handle,
-  applyNodeChanges,
-  applyEdgeChanges,
-  NodeChange,
-  EdgeChange,
-} from "reactflow";
-import "reactflow/dist/style.css";
+import { Database } from "@/data/database";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import {
-  forceSimulation,
-  forceLink,
-  forceManyBody,
   forceCenter,
   forceCollide,
+  forceLink,
+  forceManyBody,
+  forceSimulation,
   forceX,
   forceY,
 } from "d3-force";
-import { Parser } from "@dbml/core";
+import React, { useCallback } from "react";
+import ReactFlow, {
+  applyEdgeChanges,
+  applyNodeChanges,
+  Background,
+  ConnectionMode,
+  Controls,
+  Edge,
+  EdgeChange,
+  Handle,
+  MiniMap,
+  Node,
+  NodeChange,
+  Position,
+  useReactFlow,
+} from "reactflow";
+import "reactflow/dist/style.css";
 import { cn } from "../lib/utils";
 
 interface TableColumn {
@@ -52,7 +54,8 @@ interface TableGroup {
 }
 
 interface DbmlFlowProps {
-  dbml: string;
+  database?: Database;
+  className?: string;
 }
 
 // 添加网格配置常量
@@ -440,17 +443,13 @@ const applyForceLayout = (
 };
 
 const parseDbml = (
-  dbml: string
+  database: Database
 ): {
   tables: TableNode[];
   relationships: Relationship[];
   groups: TableGroup[];
 } => {
   try {
-    const parser = new Parser();
-    const parsedDbml = parser.parse(dbml, "dbmlv2");
-    const database = parsedDbml.export();
-
     const tables: TableNode[] = database.schemas[0].tables.map((table) => ({
       name: table.name,
       columns: table.fields.map((field) => ({
@@ -692,7 +691,7 @@ const nodeTypes = {
   groupNode: GroupNode,
 };
 
-export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
+export const DbmlFlow: React.FC<DbmlFlowProps> = ({ database, className }) => {
   const [nodes, setNodes] = React.useState<Node[]>([]);
   const [edges, setEdges] = React.useState<Edge[]>([]);
   const [highlightedEdges, setHighlightedEdges] = React.useState<Set<string>>(
@@ -702,10 +701,12 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
   const [highlightedColumns, setHighlightedColumns] = React.useState<
     Map<string, Set<string>>
   >(new Map());
+  const { fitView } = useReactFlow();
 
   // 将初始化逻辑移到单独的 useEffect 中，只依赖 dbml
   React.useEffect(() => {
-    const { tables, relationships, groups } = parseDbml(dbml);
+    if (!database) return;
+    const { tables, relationships, groups } = parseDbml(database);
     const { positions: nodePositions, groupSizes } = applyForceLayout(
       tables,
       relationships,
@@ -807,7 +808,12 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
     });
 
     setEdges(initialEdges);
-  }, [dbml]); // 只依赖 dbml
+
+    // fit view
+    setTimeout(() => {
+      fitView({ duration: 1000 });
+    }, 10);
+  }, [database]); // 只依赖 dbml
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) =>
@@ -992,7 +998,7 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
   };
 
   return (
-    <div className="w-full h-[600px]">
+    <div className={cn("w-full h-[calc(100vh-165px)]", className)}>
       <ReactFlow
         nodes={styledNodes}
         edges={styledEdges}
@@ -1025,6 +1031,7 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
         selectNodesOnDrag={false}
       >
         <Background gap={GRID_SIZE} size={1} color="#ddd" />
+        <MiniMap />
         <Controls />
       </ReactFlow>
     </div>
