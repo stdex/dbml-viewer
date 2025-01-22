@@ -25,6 +25,7 @@ import {
   forceCollide,
 } from "d3-force";
 import { Parser } from "@dbml/core";
+import { cn } from "../lib/utils";
 
 interface TableColumn {
   name: string;
@@ -212,13 +213,12 @@ const TableNode = ({ data }: TableNodeProps) => {
             <Tooltip.Root key={index}>
               <Tooltip.Trigger asChild>
                 <div
-                  className="px-4 py-2 border-b flex justify-between items-center relative hover:bg-blue-200 cursor-pointer"
-                  style={{
-                    backgroundColor: data.highlightedColumns?.has(column.name)
-                      ? "rgba(255, 51, 102, 0.1)"
-                      : "",
-                    transition: "background-color 0.2s ease",
-                  }}
+                  className={cn(
+                    "px-4 py-2 border-b flex justify-between items-center relative hover:bg-red-100 cursor-pointer",
+                    data.highlightedColumns?.has(column.name)
+                      ? "bg-red-100"
+                      : ""
+                  )}
                 >
                   <div className="flex items-center">
                     {data.columnsWithRelations?.has(column.name) && (
@@ -318,7 +318,6 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
     new Set()
   );
   const [hoveredNode, setHoveredNode] = React.useState<string | null>(null);
-  const [nodePositions, setNodePositions] = useState<NodePosition[]>([]);
   const [highlightedColumns, setHighlightedColumns] = React.useState<
     Map<string, Set<string>>
   >(new Map());
@@ -462,7 +461,7 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
 
   // 修改 onNodeMouseEnter
   const onNodeMouseEnter = useCallback(
-    (event: React.MouseEvent, node: Node) => {
+    (_: React.MouseEvent, node: Node) => {
       const newHighlightedEdges = new Set<string>();
       const newHighlightedColumns = new Map<string, Set<string>>();
 
@@ -572,10 +571,6 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
     });
   }, [nodes, edges, hoveredNode, highlightedEdges, highlightedColumns]);
 
-  const handleDragStart = (event: React.DragEvent, nodeId: string) => {
-    event.dataTransfer.setData("nodeId", nodeId);
-  };
-
   const handleDragOver = (event: React.DragEvent) => {
     event.preventDefault();
   };
@@ -619,7 +614,7 @@ export const DbmlFlow: React.FC<DbmlFlowProps> = ({ dbml }) => {
   };
 
   return (
-    <div style={{ width: "100%", height: "1200px" }}>
+    <div className="w-full h-[1200px]">
       <ReactFlow
         nodes={styledNodes}
         edges={styledEdges}
