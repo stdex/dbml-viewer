@@ -30,6 +30,7 @@ import { useDatabaseStore } from "@/data/store";
 import { cn } from "@/lib/utils";
 import { Parser } from "@dbml/core";
 import { useCallback, useEffect, useState } from "react";
+import GitHubIcon from "./github-mark.svg?react"
 
 const data = [
   [
@@ -104,6 +105,11 @@ export function NavActions({}: NavActionsProps) {
 
   return (
     <div className="flex items-center gap-2 text-sm">
+      <Button variant="ghost" size="icon">
+        <a href="https://github.com/go-kenka/dbml-viewer" target="_blank">
+          <GitHubIcon className="w-4 h-4" />
+        </a>
+      </Button>
       <UploadButton />
       <Popover>
         <PopoverTrigger asChild>
