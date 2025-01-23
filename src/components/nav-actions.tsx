@@ -30,30 +30,31 @@ import { useDatabaseStore } from "@/data/store";
 import { cn } from "@/lib/utils";
 import { Parser } from "@dbml/core";
 import { useCallback, useEffect, useState } from "react";
-import GitHubIcon from "./github-mark.svg?react"
+import GitHubIcon from "./github-mark.svg?react";
+import { useNavigate } from "react-router-dom";
 
 const data = [
   [
     {
-      label: "复制链接",
+      label: "复制链接(即将支持)",
       icon: Link,
     },
     {
-      label: "复制",
+      label: "复制(即将支持)",
       icon: Copy,
     },
     {
-      label: "查看历史",
+      label: "查看历史(即将支持)",
       icon: GalleryVerticalEnd,
     },
   ],
   [
     {
-      label: "导入",
+      label: "导入(即将支持)",
       icon: ArrowUp,
     },
     {
-      label: "导出",
+      label: "导出(即将支持)",
       icon: ArrowDown,
     },
   ],
@@ -64,6 +65,7 @@ interface NavActionsProps {}
 export function NavActions({}: NavActionsProps) {
   const [dbmlContent, setDbmlContent] = useState<string>("");
   const { setDatabase } = useDatabaseStore();
+  const navigate = useNavigate();
 
   const handleFileUpload = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -85,6 +87,7 @@ export function NavActions({}: NavActionsProps) {
       const parsedDbml = parser.parse(dbmlContent, "dbmlv2");
       const database = parsedDbml.export();
       setDatabase(database);
+      navigate("/");
     }
   }, [dbmlContent]);
 
