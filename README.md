@@ -15,10 +15,9 @@
 
 ## 技术栈
 
-- React 18
+- React
 - TypeScript
 - Vite
 - Tailwind CSS
 - React Router DOM
-- shadcn/ui
 - React Flow
